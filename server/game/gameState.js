@@ -28,6 +28,7 @@ class GameRoom {
     this.roundNumber = 0;
     this.street = 0;       // generic "stage" counter the variant manages
     this.winners = null;
+    this.revealHands = false; // true only at a real showdown — a fold-win never reveals hole cards
     this.pendingPayouts = null; // deferred pot award, collected at next deal
     this.potCoins = [];    // actual coins in the pot (As-unit denominations)
     this.wildRanks = new Set(); // ranks currently wild (variants set this)
@@ -144,6 +145,7 @@ class GameRoom {
     this.currentBet = 0;
     this.street = 0;
     this.winners = null;
+    this.revealHands = false;
     this.potCoins = [];
     this.wildRanks = new Set();
     this.actionOrder = [];
@@ -190,6 +192,7 @@ class GameRoom {
     this.collectPot(); // award the previous hand's pot (if any) before dealing
     this.wildRanks = new Set(this.variant.staticWildRanks || []);
     this.potCoins = [];
+    this.revealHands = false; // hide hole cards until/unless a real showdown happens
     for (const p of this.players.values()) p.committed = 0; // fresh per-hand tally
     this.variant.startHand(this);
   }
@@ -300,8 +303,10 @@ class GameRoom {
     this.variant.onBettingComplete(this);
   }
 
-  // The variant calls this to run the showdown using its winner logic.
+  // The variant calls this to run the showdown using its winner logic. Only here
+  // do hole cards get revealed — a hand won by everyone else folding does NOT.
   goToShowdown() {
+    this.revealHands = true;
     const groups = this.variant.determineWinners(this);
     this.finishHand(groups);
   }
@@ -352,7 +357,10 @@ class GameRoom {
   }
 
   publicState(requestingPlayerId = null) {
-    const revealAll = this.phase === 'showdown' || this.phase === 'results';
+    // Reveal hole cards ONLY at a genuine showdown. A hand won because everyone
+    // else folded keeps the winner's hole cards hidden (they're never forced to
+    // show). Face-up cards remain visible regardless (they're already public).
+    const revealAll = this.revealHands;
     const withWild = (card) => ({ ...card, wild: this.wildRanks.has(card.rank) });
 
     // The TABLE view of each player's hand is identical for every viewer: a
