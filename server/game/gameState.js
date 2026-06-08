@@ -1,0 +1,406 @@
+const { bestHand } = require('./handEvaluator');
+const { getVariant, DEFAULT_VARIANT } = require('./variants');
+const {
+  emptyPurse, purseValue, minCoins, coinsToPurse, buyInPurse,
+  exactFromPurse, coverFromPurse,
+} = require('./bank');
+
+const DEFAULT_BUYIN = 400; // 400 As units = $100.00 (internal unit: As = $0.25)
+
+/**
+ * GameRoom is the GENERIC engine: it owns players, chips, the pot, the betting
+ * mechanics (fold/check/call/raise + action-order traversal), reconnection and
+ * the card-privacy mechanism. Game-specific rules (how cards are dealt, how many
+ * streets, who acts first, who wins) live in a pluggable variant module that
+ * this engine calls into via hooks. See game/variants/.
+ */
+class GameRoom {
+  constructor(code, dealerId, dealerName, dealerSocketId, variantId = DEFAULT_VARIANT, ante = 1, buyIn = DEFAULT_BUYIN) {
+    this.code = code;
+    this.dealerId = dealerId; // stable clientId of the dealer
+    this.variant = getVariant(variantId);
+    this.variantId = this.variant.id;
+    this.ante = ante; // in As units (1 As = $0.25); dealer-configurable
+    this.phase = 'lobby'; // lobby | betting | showdown | results
+    this.deck = [];
+    this.pot = 0;
+    this.currentBet = 0;
+    this.roundNumber = 0;
+    this.street = 0;       // generic "stage" counter the variant manages
+    this.winners = null;
+    this.pendingPayouts = null; // deferred pot award, collected at next deal
+    this.potCoins = [];    // actual coins in the pot (As-unit denominations)
+    this.wildRanks = new Set(); // ranks currently wild (variants set this)
+    this.players = new Map(); // clientId -> player
+    this.actionOrder = []; // ordered list of clientIds for the current round
+    this.currentActorIndex = 0;
+    this.addPlayer(dealerId, dealerName, dealerSocketId, true, buyIn);
+  }
+
+  // id is the stable clientId; socketId is the current (replaceable) connection.
+  // Each player gets a PURSE of real coins (a balanced mix for their buy-in);
+  // chips is the cached total value of that purse.
+  addPlayer(id, name, socketId, isDealer = false, buyIn = DEFAULT_BUYIN) {
+    const purse = buyInPurse(buyIn);
+    this.players.set(id, {
+      id,
+      socketId,
+      name,
+      isDealer,
+      purse,
+      chips: purseValue(purse),
+      hand: [],
+      bet: 0,
+      folded: false,
+      allIn: false,
+      connected: true,
+    });
+  }
+
+  // ── Coin helpers (physical money) ───────────────────────────────────────────
+  _sync(player) { player.chips = purseValue(player.purse); }
+  _removeFromPurse(player, coins) { for (const v of coins) player.purse[v] = (player.purse[v] || 0) - 1; }
+  _addToPurse(player, coins) { for (const v of coins) player.purse[v] = (player.purse[v] || 0) + 1; }
+  addCoinsToPot(coins) { for (const v of coins) { this.potCoins.push(v); this.pot += v; } }
+  removeCoinsFromPot(coins) {
+    for (const v of coins) {
+      const i = this.potCoins.indexOf(v);
+      if (i >= 0) { this.potCoins.splice(i, 1); this.pot -= v; }
+    }
+  }
+
+  // Move `amount` of value from a player's purse into the pot using real coins.
+  //  1) exact coins from the purse, else
+  //  2) overpay and take exact change FROM THE POT's coins, else
+  //  3) the Bank breaks the coins: mint the exact bet into the pot and return
+  //     the change to the purse (minimum coins).
+  payIntoPot(player, amount) {
+    if (amount <= 0) return;
+    const exact = exactFromPurse(player.purse, amount);
+    if (exact) {
+      this._removeFromPurse(player, exact);
+      this.addCoinsToPot(exact);
+      this._sync(player);
+      return;
+    }
+    const cover = coverFromPurse(player.purse, amount);
+    if (!cover) { // safety net (shouldn't happen: amount <= chips)
+      this.addCoinsToPot(minCoins(amount));
+      this._sync(player);
+      return;
+    }
+    const over = cover.total - amount;
+    const change = exactFromPurse(coinsToPurse(this.potCoins), over);
+    if (change) {
+      // Overpay onto the table, take change back from the pot's coins.
+      this._removeFromPurse(player, cover.coins);
+      this.addCoinsToPot(cover.coins);
+      this.removeCoinsFromPot(change);
+      this._addToPurse(player, change);
+      this._sync(player);
+      return;
+    }
+    // Bank: break the overpay coin(s) — exact bet to the pot, change to purse.
+    this._removeFromPurse(player, cover.coins);
+    this.addCoinsToPot(minCoins(amount));
+    this._addToPurse(player, minCoins(over));
+    this._sync(player);
+  }
+
+  // Re-link an existing player to a new socket after a refresh/reconnect.
+  reconnect(id, socketId) {
+    const player = this.players.get(id);
+    if (!player) return false;
+    player.socketId = socketId;
+    player.connected = true;
+    return true;
+  }
+
+  removePlayer(id) {
+    this.players.delete(id);
+    this.actionOrder = this.actionOrder.filter(pid => pid !== id);
+  }
+
+  getPlayer(id) {
+    return this.players.get(id);
+  }
+
+  getActivePlayers() {
+    return [...this.players.values()].filter(p => !p.folded && p.connected);
+  }
+
+  // Return the table to the lobby and clear the previous deal so stale
+  // cards/bets never linger between rounds.
+  resetToLobby() {
+    this.collectPot(); // make sure the last hand's winner is paid before leaving
+    this.phase = 'lobby';
+    this.deck = [];
+    this.pot = 0;
+    this.currentBet = 0;
+    this.street = 0;
+    this.winners = null;
+    this.potCoins = [];
+    this.wildRanks = new Set();
+    this.actionOrder = [];
+    this.currentActorIndex = 0;
+    for (const player of this.players.values()) {
+      player.hand = [];
+      player.bet = 0;
+      player.folded = false;
+      player.allIn = false;
+    }
+  }
+
+  // Seat order (dealer first, then join order), used to walk clockwise.
+  seatOrder() {
+    return [...this.players.keys()];
+  }
+
+  // Players still in the hand (not folded) and connected.
+  livePlayers() {
+    return [...this.players.values()].filter(p => !p.folded && p.connected);
+  }
+
+  // Deal one card from the deck to a player, tagging whether it's face-up
+  // (public to everyone) or face-down (private to its owner until showdown).
+  // After dealing, the variant's onCardDealt hook (if any) runs — this is how
+  // dynamic-wild games like Follow the Queen update the wild rank as cards land.
+  dealTo(player, faceUp) {
+    const card = this.deck.shift();
+    card.faceUp = !!faceUp;
+    player.hand.push(card);
+    if (this.variant.onCardDealt) this.variant.onCardDealt(this, player, card);
+    return card;
+  }
+
+  // Is a given card currently wild?
+  isWild(card) {
+    return this.wildRanks.has(card.rank);
+  }
+
+  // ── Start a new hand ───────────────────────────────────────────────────────
+  // Delegates the deal/ante/forced-bet/first-round setup to the active variant.
+  // Seeds any always-on wild ranks the variant declares (e.g. "Queens wild").
+  startRound() {
+    this.collectPot(); // award the previous hand's pot (if any) before dealing
+    this.wildRanks = new Set(this.variant.staticWildRanks || []);
+    this.potCoins = [];
+    this.variant.startHand(this);
+  }
+
+  // Next live clientId clockwise after the given id.
+  playerAfter(id) {
+    const order = this.seatOrder();
+    const start = order.indexOf(id);
+    for (let i = 1; i <= order.length; i++) {
+      const candidate = order[(start + i) % order.length];
+      const p = this.players.get(candidate);
+      if (p && !p.folded && p.connected) return candidate;
+    }
+    return id;
+  }
+
+  // Build the queue of players who still need to act this round, clockwise from
+  // firstId. `excludeId`, if given, is left out entirely — used after a bet/raise
+  // so the aggressor does NOT get to act again unless someone re-raises (which
+  // rebuilds the queue). When everyone simply calls a bet, the round ends.
+  beginBetting(firstId, excludeId = null) {
+    const order = this.seatOrder();
+    const start = order.indexOf(firstId);
+    const queue = [];
+    for (let i = 0; i < order.length; i++) {
+      const id = order[(start + i) % order.length];
+      if (id === excludeId) continue;
+      const p = this.players.get(id);
+      if (p && !p.folded && p.connected && !p.allIn) queue.push(id);
+    }
+    this.actionOrder = queue;
+    this.currentActorIndex = 0;
+  }
+
+  getCurrentActor() {
+    if (this.phase !== 'betting') return null;
+    return this.actionOrder[this.currentActorIndex] ?? null;
+  }
+
+  advanceActor() {
+    this.currentActorIndex++;
+    while (
+      this.currentActorIndex < this.actionOrder.length &&
+      this.players.get(this.actionOrder[this.currentActorIndex])?.folded
+    ) {
+      this.currentActorIndex++;
+    }
+    if (this.currentActorIndex >= this.actionOrder.length) {
+      this.endBettingRound();
+    }
+  }
+
+  playerAction(playerId, action, amount = 0) {
+    if (this.getCurrentActor() !== playerId) return { error: 'Not your turn' };
+    const player = this.getPlayer(playerId);
+    if (!player) return { error: 'Player not found' };
+
+    switch (action) {
+      case 'fold':
+        player.folded = true;
+        break;
+
+      case 'check':
+        if (player.bet < this.currentBet) return { error: 'Cannot check, must call or raise' };
+        break;
+
+      case 'call': {
+        const owed = this.currentBet - player.bet;
+        const paid = Math.min(owed, player.chips);
+        player.bet += paid;
+        this.payIntoPot(player, paid); // moves real coins, updates player.chips
+        if (player.chips === 0) player.allIn = true;
+        break;
+      }
+
+      case 'raise': {
+        if (amount <= this.currentBet) return { error: 'Raise must exceed current bet' };
+        const owed = amount - player.bet;
+        const paid = Math.min(owed, player.chips);
+        player.bet += paid;
+        this.payIntoPot(player, paid); // moves real coins, updates player.chips
+        this.currentBet = player.bet;
+        if (player.chips === 0) player.allIn = true;
+        // Everyone else still in must respond to the raise, starting to the
+        // raiser's left. The raiser is excluded — if all just call, the round
+        // ends without the raiser acting again; a re-raise rebuilds the queue.
+        this.beginBetting(this.playerAfter(playerId), playerId);
+        return { ok: true };
+      }
+
+      default:
+        return { error: 'Unknown action' };
+    }
+
+    this.advanceActor();
+    return { ok: true };
+  }
+
+  // Called when everyone has acted on the current betting round. The engine
+  // handles the everyone-folded case generically; otherwise the variant decides
+  // what comes next (deal a street, a draw phase, or showdown).
+  endBettingRound() {
+    const live = this.livePlayers();
+    if (live.length <= 1) {
+      this.finishHand([{ winnerIds: live.map(p => p.id), handName: '(others folded)' }]);
+      return;
+    }
+    this.variant.onBettingComplete(this);
+  }
+
+  // The variant calls this to run the showdown using its winner logic.
+  goToShowdown() {
+    const groups = this.variant.determineWinners(this);
+    this.finishHand(groups);
+  }
+
+  // Generic pot resolution. `groups` is an array of pot-groups; the pot is split
+  // equally across groups (1 group = whole pot; Hi-Lo = 2 groups), then equally
+  // among the winners within each group. The payout is DEFERRED (stored in
+  // pendingPayouts and kept in the pot) until collectPot() runs — so the coins
+  // don't reach the winner's purse until the dealer starts the next hand.
+  finishHand(groups) {
+    const perGroup = Math.floor(this.pot / Math.max(groups.length, 1));
+    const flat = [];
+    const payouts = [];
+    for (const g of groups) {
+      const ids = g.winnerIds.filter(id => this.players.has(id));
+      if (ids.length === 0) continue;
+      const share = Math.floor(perGroup / ids.length);
+      for (const id of ids) {
+        payouts.push({ id, amount: share });
+        flat.push({ id, name: this.players.get(id).name, handName: g.handName });
+      }
+    }
+    this.pendingPayouts = payouts;
+    this.winners = flat;
+    this.phase = 'results';
+    return flat;
+  }
+
+  // Award the deferred pot to the winner(s) and clear the table. Called when the
+  // dealer starts the next hand or returns to the lobby.
+  collectPot() {
+    if (this.pendingPayouts) {
+      if (this.pendingPayouts.length === 1) {
+        // Single winner gets the ACTUAL coins from the pot.
+        const p = this.players.get(this.pendingPayouts[0].id);
+        if (p) { this._addToPurse(p, this.potCoins); this._sync(p); }
+      } else {
+        // Split pot: the Bank pays each winner their share in minimum coins.
+        for (const { id, amount } of this.pendingPayouts) {
+          const p = this.players.get(id);
+          if (p) { this._addToPurse(p, minCoins(amount)); this._sync(p); }
+        }
+      }
+      this.pendingPayouts = null;
+    }
+    this.pot = 0;
+    this.potCoins = [];
+  }
+
+  publicState(requestingPlayerId = null) {
+    const revealAll = this.phase === 'showdown' || this.phase === 'results';
+    const withWild = (card) => ({ ...card, wild: this.wildRanks.has(card.rank) });
+
+    // The TABLE view of each player's hand is identical for every viewer: a
+    // card shows only if it was dealt face-up or once cards are revealed at
+    // showdown (folded players keep their hidden cards mucked). A player's own
+    // hole card is NOT special-cased here — the table looks the same to all.
+    const playersArr = [...this.players.values()].map(p => ({
+      id: p.id,
+      name: p.name,
+      isDealer: p.isDealer,
+      // Chip totals are private — only sent to their owner. Current bets are
+      // public (they're part of the pot).
+      chips: p.id === requestingPlayerId ? p.chips : null,
+      bet: p.bet,
+      folded: p.folded,
+      allIn: p.allIn,
+      connected: p.connected,
+      cardCount: p.hand.length,
+      hand: p.hand.map(card =>
+        (card.faceUp || (revealAll && !p.folded))
+          ? withWild(card)
+          : { rank: '?', suit: '?', id: 'back' }
+      ),
+      handName: (revealAll && p.hand.length >= 5 && !p.folded)
+        ? bestHand(p.hand, this.wildRanks).name
+        : null,
+    }));
+
+    // The requesting player's OWN full hand (incl. their hole card), shown only
+    // to them in their private hand row — never on the shared table.
+    const me = this.players.get(requestingPlayerId);
+    const myHand = me ? me.hand.map(withWild) : [];
+    const myPurse = me ? { ...me.purse } : null; // the owner's actual coins
+
+    return {
+      code: this.code,
+      phase: this.phase,
+      pot: this.pot,
+      potCoins: [...this.potCoins],
+      currentBet: this.currentBet,
+      roundNumber: this.roundNumber,
+      street: this.street,
+      variantId: this.variantId,
+      variantName: this.variant.name,
+      maxPlayers: this.variant.maxPlayers,
+      ante: this.ante,
+      wildRanks: [...this.wildRanks],
+      currentActor: this.getCurrentActor(),
+      dealerId: this.dealerId,
+      players: playersArr,
+      myHand,
+      myPurse,
+    };
+  }
+}
+
+module.exports = { GameRoom };

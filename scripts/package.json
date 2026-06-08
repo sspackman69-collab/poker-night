@@ -1,0 +1,9 @@
+{
+  "name": "poker-night-scripts",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Asset processing scripts (coin chips, etc.)",
+  "dependencies": {
+    "sharp": "^0.33.5"
+  }
+}

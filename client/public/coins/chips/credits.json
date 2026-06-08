@@ -1,0 +1,27 @@
+[
+  {
+    "value": 100,
+    "name": "Aureus of Nero",
+    "file": "100.png"
+  },
+  {
+    "value": 500,
+    "name": "Solidus of Leontius",
+    "file": "500.png"
+  },
+  {
+    "value": 5,
+    "name": "Sestertius of Hadrian",
+    "file": "5.png"
+  },
+  {
+    "value": 25,
+    "name": "Denarius (Cornelius Cethegus)",
+    "file": "25.png"
+  },
+  {
+    "value": 1,
+    "name": "As of Antoninus Pius",
+    "file": "1.png"
+  }
+]
