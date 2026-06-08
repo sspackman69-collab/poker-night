@@ -51,6 +51,7 @@ class GameRoom {
       chips: purseValue(purse),
       hand: [],
       bet: 0,
+      committed: 0, // cumulative value put into the pot THIS hand (never street-reset)
       folded: false,
       allIn: false,
       connected: true,
@@ -76,6 +77,10 @@ class GameRoom {
   //     the change to the purse (minimum coins).
   payIntoPot(player, amount) {
     if (amount <= 0) return;
+    // Track cumulative contribution this hand so the client can animate every
+    // pot deposit — including a call that closes the round (after which per-street
+    // `bet` is reset to 0 before the next broadcast).
+    player.committed = (player.committed || 0) + amount;
     const exact = exactFromPurse(player.purse, amount);
     if (exact) {
       this._removeFromPurse(player, exact);
@@ -185,6 +190,7 @@ class GameRoom {
     this.collectPot(); // award the previous hand's pot (if any) before dealing
     this.wildRanks = new Set(this.variant.staticWildRanks || []);
     this.potCoins = [];
+    for (const p of this.players.values()) p.committed = 0; // fresh per-hand tally
     this.variant.startHand(this);
   }
 
@@ -361,6 +367,7 @@ class GameRoom {
       // public (they're part of the pot).
       chips: p.id === requestingPlayerId ? p.chips : null,
       bet: p.bet,
+      committed: p.committed || 0, // public: cumulative pot contribution this hand
       folded: p.folded,
       allIn: p.allIn,
       connected: p.connected,

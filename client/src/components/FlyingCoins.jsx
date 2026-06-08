@@ -45,29 +45,40 @@ function Flyer({ from, to, value, delay, onDone }) {
 
 export default function FlyingCoins({ ordered, seatPositions, potCoins, phase, winners, roundNumber, collectSignal }) {
   const [flyers, setFlyers] = useState([]);
-  const prevBets = useRef({});
+  const prevCommitted = useRef({});
   const prevRound = useRef(roundNumber);
   const initialized = useRef(false);
 
   const remove = (id) => setFlyers(f => f.filter(x => x.id !== id));
   const spawn = (specs) => { if (specs.length) setFlyers(f => [...f, ...specs]); };
 
-  // Bets flying INTO the pot whenever a player's bet increases.
+  // Coins flying INTO the pot whenever a player's CUMULATIVE contribution grows.
+  // We track `committed` (total put in this hand) rather than per-street `bet`,
+  // because a call that closes a betting round resets every `bet` to 0 in the
+  // same update — so a bet-based check would miss the closing call's coins.
   useEffect(() => {
-    if (roundNumber !== prevRound.current) { prevBets.current = {}; prevRound.current = roundNumber; }
+    // New hand: re-baseline to current contributions so antes/bring-in (already
+    // posted before the first frame) don't spuriously fly in.
+    if (roundNumber !== prevRound.current) {
+      prevCommitted.current = {};
+      ordered.forEach(p => { prevCommitted.current[p.id] = p.committed || 0; });
+      prevRound.current = roundNumber;
+      return;
+    }
     if (!initialized.current) {
-      ordered.forEach(p => { prevBets.current[p.id] = p.bet; });
+      ordered.forEach(p => { prevCommitted.current[p.id] = p.committed || 0; });
       initialized.current = true;
       return;
     }
     const specs = [];
     ordered.forEach((p, i) => {
-      const prev = prevBets.current[p.id] ?? 0;
-      if (phase === 'betting' && p.bet > prev && seatPositions[i]) {
-        repCoins(p.bet - prev, 5).forEach((value, k) =>
+      const prev = prevCommitted.current[p.id] ?? 0;
+      const cur = p.committed || 0;
+      if (cur > prev && seatPositions[i]) {
+        repCoins(cur - prev, 5).forEach((value, k) =>
           specs.push({ id: ++_id, from: seatPositions[i], to: POT_POS, value, delay: k * 70 }));
       }
-      prevBets.current[p.id] = p.bet;
+      prevCommitted.current[p.id] = cur;
     });
     spawn(specs);
   }, [ordered, phase, roundNumber, seatPositions]);
