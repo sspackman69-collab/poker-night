@@ -18,3 +18,6 @@ npm-debug.log*
 # Editor
 .vscode/
 .idea/
+
+# Claude Code (machine-local permissions/settings — not shared)
+.claude/settings.local.json
