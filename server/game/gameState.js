@@ -233,6 +233,12 @@ class GameRoom {
   }
 
   advanceActor() {
+    // If everyone else has folded, the last player left wins immediately — they
+    // shouldn't be asked to call/act against an empty table.
+    if (this.livePlayers().length <= 1) {
+      this.endBettingRound();
+      return;
+    }
     this.currentActorIndex++;
     while (
       this.currentActorIndex < this.actionOrder.length &&
