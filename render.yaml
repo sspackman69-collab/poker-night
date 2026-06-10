@@ -1,0 +1,16 @@
+# Render deploy (single service: Express serves the built client + Socket.IO).
+# 1. Push this repo to GitHub.
+# 2. In Render: New + → Blueprint → pick this repo. Render reads this file.
+# 3. Deploy. Render injects PORT automatically; no env vars required.
+services:
+  - type: web
+    name: poker-night
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+    # Note: the free plan spins down when idle (~30s cold start), and room
+    # state is in-memory so it resets if the service restarts.

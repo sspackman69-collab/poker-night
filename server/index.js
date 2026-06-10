@@ -1,17 +1,25 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
+const fs = require('fs');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { GameRoom } = require('./game/gameState');
 const { listVariants } = require('./game/variants');
 
+// Allowed browser origin for CORS. In a single-service deploy the client is
+// served from this same server, so same-origin requests need no CORS at all;
+// '*' is a safe default. Set CLIENT_ORIGIN to lock it down (e.g. a separate
+// static-host deployment).
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
+
 const app = express();
-app.use(cors());
+app.use(cors({ origin: CLIENT_ORIGIN }));
 app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
+  cors: { origin: CLIENT_ORIGIN, methods: ['GET', 'POST'] }
 });
 
 // roomCode -> GameRoom
@@ -193,6 +201,20 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+// ── Serve the built client (single-service production deploy) ────────────────
+// If the Vite build exists, serve it from this same server so the whole app is
+// one deployable unit on one URL (no CORS, one process). In local dev the build
+// won't exist and Vite serves the client separately on :3000 — this is skipped.
+const CLIENT_DIST = path.join(__dirname, '..', 'client', 'dist');
+if (fs.existsSync(path.join(CLIENT_DIST, 'index.html'))) {
+  app.use(express.static(CLIENT_DIST));
+  // SPA fallback: any non-asset route returns index.html so client routing works.
+  app.get('*', (req, res) => res.sendFile(path.join(CLIENT_DIST, 'index.html')));
+  console.log('Serving built client from', CLIENT_DIST);
+} else {
+  console.log('No client build found — API-only (dev mode; run the client with Vite).');
+}
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`Poker Night server running on port ${PORT}`));

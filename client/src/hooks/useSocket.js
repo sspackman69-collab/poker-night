@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
-const SERVER_URL = 'http://localhost:3001';
+// Where to reach the Socket.IO server.
+//  • Production (single-service deploy): the server also serves this built
+//    client, so connect to the SAME origin — leave the URL undefined and
+//    socket.io defaults to window.location.origin.
+//  • Dev: Vite serves the client on :3000 and the API runs on :3001, so point
+//    there. Override either case with VITE_SERVER_URL at build time.
+const SERVER_URL =
+  import.meta.env.VITE_SERVER_URL ||
+  (import.meta.env.DEV ? 'http://localhost:3001' : undefined);
 
 // Per-tab identity that survives refreshes/reconnects.
 // Uses sessionStorage (not localStorage) so two tabs in the SAME browser are
@@ -31,7 +39,10 @@ let sharedSocket = null;
 function getSocket(clientId) {
   if (sharedSocket) return sharedSocket;
 
-  const socket = io(SERVER_URL, { transports: ['websocket', 'polling'] });
+  // With no URL, socket.io connects to the page's own origin (production
+  // single-service). In dev, SERVER_URL points at the separate API server.
+  const opts = { transports: ['websocket', 'polling'] };
+  const socket = SERVER_URL ? io(SERVER_URL, opts) : io(opts);
 
   // Auto-rejoin on every (re)connect. Attached once, at creation, so it can
   // never miss the connect event. On success the server broadcasts gameState,

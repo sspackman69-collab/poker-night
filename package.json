@@ -1,0 +1,15 @@
+{
+  "name": "poker-night",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Poker Night — multiplayer card game (single-service deploy: Express serves the built client + Socket.IO).",
+  "scripts": {
+    "build": "npm --prefix server install --omit=dev && npm --prefix client install --include=dev && npm --prefix client run build",
+    "start": "node server/index.js",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
