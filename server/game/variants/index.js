@@ -2,10 +2,12 @@
 // implementing the variant hooks (see fiveCardStud.js), then add one line here.
 const fiveCardStud = require('./fiveCardStud');
 const sevenCardStud = require('./sevenCardStud');
+const followTheQueen = require('./followTheQueen');
 
 const VARIANTS = {
   [fiveCardStud.id]: fiveCardStud,
   [sevenCardStud.id]: sevenCardStud,
+  [followTheQueen.id]: followTheQueen,
   // [fiveCardDraw.id]: fiveCardDraw,
   // [texasHoldem.id]: texasHoldem,
   // ...
