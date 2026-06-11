@@ -170,6 +170,17 @@ class GameRoom {
     return [...this.players.values()].filter(p => !p.folded && p.connected);
   }
 
+  // The order cards are physically DEALT: starting at the dealer's left and
+  // proceeding clockwise, with the DEALER receiving last (as in real poker).
+  // Variants must deal in this order — it determines which card lands where,
+  // which matters for e.g. Follow the Queen's "card after a Queen is wild".
+  dealOrder() {
+    const live = this.livePlayers();
+    const di = live.findIndex(p => p.id === this.dealerId);
+    if (di < 0) return live; // dealer is sitting out — leave order as-is
+    return [...live.slice(di + 1), ...live.slice(0, di + 1)]; // dealer's left → … → dealer
+  }
+
   // Deal one card from the deck to a player, tagging whether it's face-up
   // (public to everyone) or face-down (private to its owner until showdown).
   // After dealing, the variant's onCardDealt hook (if any) runs — this is how

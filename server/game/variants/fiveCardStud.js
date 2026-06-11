@@ -47,9 +47,10 @@ module.exports = {
       room.payIntoPot(player, ante);
     }
 
-    // One hole card (face down), then one door card (face up).
-    for (const p of room.livePlayers()) room.dealTo(p, false);
-    for (const p of room.livePlayers()) room.dealTo(p, true);
+    // One hole card (face down), then one door card (face up). Dealt in deal
+    // order (dealer's left first, dealer last).
+    for (const p of room.dealOrder()) room.dealTo(p, false);
+    for (const p of room.dealOrder()) room.dealTo(p, true);
 
     // Bring-in: lowest up-card posts a forced bet; action starts to their left,
     // and the bring-in acts last on this opening round.
@@ -81,7 +82,7 @@ module.exports = {
     }
 
     room.street++;
-    for (const p of room.livePlayers()) room.dealTo(p, true);
+    for (const p of room.dealOrder()) room.dealTo(p, true);
     for (const p of room.players.values()) p.bet = 0;
     room.currentBet = 0;
 

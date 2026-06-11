@@ -52,10 +52,11 @@ module.exports = {
       }
     }
 
-    // Third street: two hole cards (face down) + one door card (face up).
-    for (const p of room.livePlayers()) room.dealTo(p, false);
-    for (const p of room.livePlayers()) room.dealTo(p, false);
-    for (const p of room.livePlayers()) room.dealTo(p, true);
+    // Third street: two hole cards (face down) + one door card (face up). Dealt
+    // in deal order (dealer's left first, dealer last).
+    for (const p of room.dealOrder()) room.dealTo(p, false);
+    for (const p of room.dealOrder()) room.dealTo(p, false);
+    for (const p of room.dealOrder()) room.dealTo(p, true);
 
     // Bring-in: lowest door (up) card posts and acts first; play to their left.
     const live = room.livePlayers();
@@ -83,7 +84,7 @@ module.exports = {
     room.street++;
     // Streets 4–6 are dealt face up; the 7th (river) is dealt face down.
     const faceUp = room.street <= 6;
-    for (const p of room.livePlayers()) room.dealTo(p, faceUp);
+    for (const p of room.dealOrder()) room.dealTo(p, faceUp);
 
     for (const p of room.players.values()) p.bet = 0;
     room.currentBet = 0;
