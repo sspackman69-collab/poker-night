@@ -3,11 +3,13 @@
 const fiveCardStud = require('./fiveCardStud');
 const sevenCardStud = require('./sevenCardStud');
 const followTheQueen = require('./followTheQueen');
+const blackWidow = require('./blackWidow');
 
 const VARIANTS = {
   [fiveCardStud.id]: fiveCardStud,
   [sevenCardStud.id]: sevenCardStud,
   [followTheQueen.id]: followTheQueen,
+  [blackWidow.id]: blackWidow,
   // [fiveCardDraw.id]: fiveCardDraw,
   // [texasHoldem.id]: texasHoldem,
   // ...

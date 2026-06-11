@@ -115,6 +115,11 @@ export default function App() {
     setWinners(null);
   }
 
+  async function handleRedeal() {
+    const res = await emit('redeal', {});
+    if (res?.error) showToast(res.error);
+  }
+
   // Reset the bet box to a sensible default whenever the turn or bet changes.
   useEffect(() => {
     if (!gameState || gameState.phase !== 'betting') return;
@@ -267,7 +272,12 @@ export default function App() {
               {phase === 'betting' && (isMyTurn ? '⬇ Your Turn' : `Waiting for ${players.find(p => p.id === currentActor)?.name ?? '…'}…`)}
               {phase === 'showdown' && 'Showdown — all cards revealed'}
               {phase === 'results' && '🏆 Round over'}
+              {phase === 'redeal' && (isDealer ? '🕷️ Re-deal required — click Re-deal' : '🕷️ Waiting for dealer to re-deal…')}
             </div>
+
+            {phase === 'redeal' && gameState.redealReason && (
+              <div className="text-rose-300 text-xs text-center max-w-md">{gameState.redealReason}</div>
+            )}
 
             {phase === 'betting' && !isDealer && (
               <BettingControls
@@ -289,6 +299,7 @@ export default function App() {
                 onSetAnte={handleSetAnte}
                 onStart={handleDealNext}
                 onNewRound={handleNewRound}
+                onRedeal={handleRedeal}
                 busy={collecting}
               />
             )}

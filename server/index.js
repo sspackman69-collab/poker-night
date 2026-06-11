@@ -148,6 +148,25 @@ io.on('connection', (socket) => {
     cb?.({ ok: true });
   });
 
+  // Dealer triggers a re-deal (Black Widow: Q♠ showed / no queens up). Keeps the
+  // pot, deals a fresh board.
+  socket.on('redeal', (_, cb) => {
+    const info = socketInfo.get(socket.id);
+    const room = info && rooms.get(info.code);
+    if (!room) return cb?.({ error: 'Room not found' });
+    if (room.dealerId !== info.clientId) return cb?.({ error: 'Only the dealer can re-deal' });
+
+    const result = room.redeal();
+    if (result.error) return cb?.({ error: result.error });
+
+    broadcastRoom(room);
+    if (room.announce) {
+      io.to(info.code).emit('announce', { message: room.announce });
+      room.announce = null;
+    }
+    cb?.({ ok: true });
+  });
+
   // Player action: fold, check, call, raise
   socket.on('playerAction', ({ action, amount }, cb) => {
     const info = socketInfo.get(socket.id);
@@ -158,6 +177,12 @@ io.on('connection', (socket) => {
     if (result.error) return cb?.({ error: result.error });
 
     broadcastRoom(room);
+    // A mid-hand event may post a message (e.g. Black Widow pausing for a
+    // re-deal when the Q♠ turns up on a later street).
+    if (room.announce) {
+      io.to(info.code).emit('announce', { message: room.announce });
+      room.announce = null;
+    }
     // The engine deals streets and resolves the showdown automatically; when a
     // hand ends it sets phase 'results' and room.winners.
     if (room.phase === 'results' && room.winners) {

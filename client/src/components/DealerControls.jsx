@@ -1,6 +1,6 @@
 import { ANTE_OPTIONS } from './Coins';
 
-export default function DealerControls({ phase, playerCount, ante, onSetAnte, onStart, onNewRound, busy }) {
+export default function DealerControls({ phase, playerCount, ante, onSetAnte, onStart, onNewRound, onRedeal, busy }) {
   return (
     <div className="flex flex-wrap items-center gap-3 justify-center">
       <span className="text-gold text-xs font-semibold uppercase tracking-wider mr-1">Dealer Controls</span>
@@ -20,6 +20,16 @@ export default function DealerControls({ phase, playerCount, ante, onSetAnte, on
         </select>
         {phase === 'betting' && <span className="text-white/30">(next hand)</span>}
       </label>
+
+      {phase === 'redeal' && (
+        <button
+          className="btn-primary bg-rose-600 hover:bg-rose-500"
+          onClick={onRedeal}
+          disabled={busy}
+        >
+          🕷️ Re-deal
+        </button>
+      )}
 
       {(phase === 'lobby' || phase === 'results') && (
         <button

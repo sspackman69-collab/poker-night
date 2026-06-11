@@ -29,6 +29,7 @@ class GameRoom {
     this.street = 0;       // generic "stage" counter the variant manages
     this.winners = null;
     this.revealHands = false; // true only at a real showdown — a fold-win never reveals hole cards
+    this.redealReason = null; // when phase==='redeal', why (e.g. Black Widow's Q♠); dealer must re-deal
     this.pendingPayouts = null; // deferred pot award, collected at next deal
     this.potCoins = [];    // actual coins in the pot (As-unit denominations)
     this.wildRanks = new Set(); // ranks currently wild (variants set this)
@@ -146,6 +147,7 @@ class GameRoom {
     this.street = 0;
     this.winners = null;
     this.revealHands = false;
+    this.redealReason = null;
     this.potCoins = [];
     this.wildRanks = new Set();
     this.actionOrder = [];
@@ -193,8 +195,31 @@ class GameRoom {
     this.wildRanks = new Set(this.variant.staticWildRanks || []);
     this.potCoins = [];
     this.revealHands = false; // hide hole cards until/unless a real showdown happens
+    this.redealReason = null;
     for (const p of this.players.values()) p.committed = 0; // fresh per-hand tally
     this.variant.startHand(this);
+  }
+
+  // A variant calls this to PAUSE the hand for a dealer-triggered re-deal (e.g.
+  // Black Widow's Q♠ / no-queens rules). No betting is accepted while phase is
+  // 'redeal'; the dealer then calls redeal() to deal a fresh board.
+  enterRedeal(reason) {
+    this.phase = 'redeal';
+    this.redealReason = reason || 'Re-deal required';
+    this.announce = reason || null;
+    this.actionOrder = [];
+    this.currentActorIndex = 0;
+  }
+
+  // Dealer triggers the actual re-deal. The variant re-deals a fresh board while
+  // KEEPING the pot (no new ante); it may immediately re-enter 'redeal' if the
+  // new board also triggers the rule.
+  redeal() {
+    if (this.phase !== 'redeal') return { error: 'No re-deal pending' };
+    if (typeof this.variant.redeal !== 'function') return { error: 'This game has no re-deal' };
+    this.redealReason = null;
+    this.variant.redeal(this);
+    return { ok: true };
   }
 
   // Next live clientId clockwise after the given id.
@@ -319,20 +344,32 @@ class GameRoom {
 
   // Generic pot resolution. `groups` is an array of pot-groups; the pot is split
   // equally across groups (1 group = whole pot; Hi-Lo = 2 groups), then equally
-  // among the winners within each group. The payout is DEFERRED (stored in
-  // pendingPayouts and kept in the pot) until collectPot() runs — so the coins
-  // don't reach the winner's purse until the dealer starts the next hand.
+  // among the winners within each group. Integer division leaves remainders, so
+  // any odd unit(s) are handed out one-at-a-time to the earliest groups/winners —
+  // this guarantees the payouts sum EXACTLY to the pot (no chip is ever lost).
+  // The payout is DEFERRED (stored in pendingPayouts and kept in the pot) until
+  // collectPot() runs, so coins don't reach a purse until the next deal.
   finishHand(groups) {
-    const perGroup = Math.floor(this.pot / Math.max(groups.length, 1));
+    const valid = groups
+      .map(g => ({ handName: g.handName, ids: g.winnerIds.filter(id => this.players.has(id)) }))
+      .filter(g => g.ids.length > 0);
+
     const flat = [];
     const payouts = [];
-    for (const g of groups) {
-      const ids = g.winnerIds.filter(id => this.players.has(id));
-      if (ids.length === 0) continue;
-      const share = Math.floor(perGroup / ids.length);
-      for (const id of ids) {
-        payouts.push({ id, amount: share });
-        flat.push({ id, name: this.players.get(id).name, handName: g.handName });
+    if (valid.length > 0) {
+      const baseGroup = Math.floor(this.pot / valid.length);
+      let groupRem = this.pot - baseGroup * valid.length; // odd units across groups
+      for (const g of valid) {
+        const groupPot = baseGroup + (groupRem > 0 ? 1 : 0);
+        if (groupRem > 0) groupRem--;
+        const share = Math.floor(groupPot / g.ids.length);
+        let withinRem = groupPot - share * g.ids.length; // odd units within this group
+        for (const id of g.ids) {
+          const amount = share + (withinRem > 0 ? 1 : 0);
+          if (withinRem > 0) withinRem--;
+          payouts.push({ id, amount });
+          flat.push({ id, name: this.players.get(id).name, handName: g.handName });
+        }
       }
     }
     this.pendingPayouts = payouts;
@@ -414,6 +451,7 @@ class GameRoom {
       variantName: this.variant.name,
       maxPlayers: this.variant.maxPlayers,
       ante: this.ante,
+      redealReason: this.redealReason,
       wildRanks: [...this.wildRanks],
       currentActor: this.getCurrentActor(),
       dealerId: this.dealerId,

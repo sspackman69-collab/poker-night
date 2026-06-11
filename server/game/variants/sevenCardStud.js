@@ -30,10 +30,13 @@ module.exports = {
   minPlayers: 2,
   maxPlayers: 7, // 7 players * 7 cards = 49 (fits a 52-card deck)
 
-  startHand(room) {
+  // opts lets a variant re-use this deal logic for a mid-hand "re-deal" that
+  // keeps the pot and skips antes (Black Widow). Defaults preserve normal play.
+  startHand(room, opts = {}) {
+    const { keepPot = false, ante = true, bumpRound = true } = opts;
     room.deck = freshDeck();
-    room.pot = 0;
-    room.roundNumber++;
+    if (!keepPot) room.pot = 0;
+    if (bumpRound) room.roundNumber++;
     room.street = 3; // each player starts with 3 cards on third street
     room.winners = null;
 
@@ -43,8 +46,10 @@ module.exports = {
       player.folded = false;
       player.allIn = false;
       if (!player.connected) { player.folded = true; continue; }
-      const ante = Math.min(room.ante, player.chips);
-      room.payIntoPot(player, ante);
+      if (ante) {
+        const anteAmt = Math.min(room.ante, player.chips);
+        room.payIntoPot(player, anteAmt);
+      }
     }
 
     // Third street: two hole cards (face down) + one door card (face up).
