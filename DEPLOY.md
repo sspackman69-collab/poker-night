@@ -12,12 +12,18 @@ to deploy, no CORS wiring.
 > ends any games in progress. Fine for casual play; see "Persistence" below to
 > harden it later.
 
-## Prerequisite: push to GitHub (Render & Railway deploy from a repo)
+## Prerequisite: GitHub repo — DONE ✅
 
-```bash
-git remote add origin https://github.com/<you>/poker-night.git
-git push -u origin feature/deploy-prep      # or merge to main first
-```
+The code is already on GitHub at **https://github.com/sspackman69-collab/poker-night**
+(`main` is current). Render/Railway deploy straight from it; just push any new
+commits with `git push`.
+
+## Pre-deploy verification — DONE ✅
+
+The exact host build/start was dry-run locally: `npm run build` then
+`NODE_ENV=production PORT=8080 npm start` serves the built client, JS/CSS assets,
+SPA fallback, and the Socket.IO endpoint, and a full hand plays to showdown
+against it. Deploying should "just work".
 
 ---
 
