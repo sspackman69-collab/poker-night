@@ -1,19 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { DEAL_STEP, CARD_FLIGHT_MS, dealPositions } from '../hooks/useDealDelays';
 
-const SPIN_DEG = 1080; // three full turns in flight
+// Spin scales with how far the card flies (ring distance from the dealer):
+// the dealer's own cards don't spin, near neighbours do one turn, the rest tumble.
+function spinForDistance(ringDist) {
+  if (ringDist <= 0) return 0;      // dealer's own cards
+  if (ringDist <= 2) return 360;    // 1–2 seats either side of the dealer
+  return 1080;                      // everyone farther
+}
 
 let _id = 0;
 
 // One card-back tumbling from the dealer to a seat. Mirrors the coin Flyer: it
 // transitions its left/top (and rotation) from `from` to `to`, then removes
 // itself right as the static seat card appears in its place.
-function CardFlyer({ from, to, delay, onDone }) {
+function CardFlyer({ from, to, delay, spin, onDone }) {
   const [pos, setPos] = useState(from);
   const [rot, setRot] = useState(0);
   const [op, setOp] = useState(0);
   useEffect(() => {
-    const t0 = setTimeout(() => { setPos(to); setRot(SPIN_DEG); setOp(1); }, 20 + delay);
+    const t0 = setTimeout(() => { setPos(to); setRot(spin); setOp(1); }, 20 + delay);
     const t1 = setTimeout(onDone, 20 + delay + CARD_FLIGHT_MS); // land = static card appears
     return () => { clearTimeout(t0); clearTimeout(t1); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -67,10 +73,13 @@ export default function FlyingCards({ ordered, seatPositions, dealerId, roundNum
       const now = p.hand?.length ?? p.cardCount ?? 0;
       const seat = seatPositions[i];
       if (dealerSeat && seat) {
+        // Ring distance from the dealer (index 0 in `ordered`), wrapping around.
+        const ringDist = Math.min(i, N - i);
+        const spin = spinForDistance(ringDist);
         for (let c = shown; c < now; c++) {
           const dealtRound = c - shown;
           const delay = (dealtRound * N + (pos[p.id] ?? 0)) * DEAL_STEP;
-          specs.push({ id: ++_id, from: dealerSeat, to: seat, delay });
+          specs.push({ id: ++_id, from: dealerSeat, to: seat, delay, spin });
         }
       }
       base[p.id] = now;
@@ -84,7 +93,7 @@ export default function FlyingCards({ ordered, seatPositions, dealerId, roundNum
   return (
     <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 45 }}>
       {flyers.map((f) => (
-        <CardFlyer key={f.id} from={f.from} to={f.to} delay={f.delay} onDone={() => remove(f.id)} />
+        <CardFlyer key={f.id} from={f.from} to={f.to} delay={f.delay} spin={f.spin} onDone={() => remove(f.id)} />
       ))}
     </div>
   );
