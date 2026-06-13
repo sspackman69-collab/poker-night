@@ -1,6 +1,7 @@
 import PlayerSeat from './PlayerSeat';
 import { PotPile, fmtUSD } from './Coins';
 import FlyingCoins from './FlyingCoins';
+import FlyingCards from './FlyingCards';
 
 // Seat positions around the oval table (up to 8 players)
 // Returns CSS positioning classes for each index
@@ -129,6 +130,14 @@ export default function PokerTable({
           winners={winners}
           roundNumber={roundNumber}
           collectSignal={collectSignal}
+        />
+
+        {/* Cards flying (and spinning) from the dealer to each seat as they deal */}
+        <FlyingCards
+          ordered={ordered}
+          seatPositions={SEAT_POSITIONS}
+          dealerId={ordered.find((p) => p.isDealer)?.id}
+          roundNumber={roundNumber}
         />
       </div>
     </div>

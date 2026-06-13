@@ -25,8 +25,8 @@
       rgba(255,255,255,0.05) 4px,
       rgba(255,255,255,0.05) 8px
     );
-    /* Face-down cards deal in too, so the whole deal cascades (see delay prop). */
-    animation: dealIn 0.35s ease-out both;
+    /* NB: styling only — no entrance animation here, so flying-card backs (which
+       reuse this class) aren't double-animated. Static cards add .card-fade. */
   }
 
   .btn-primary {
@@ -70,14 +70,27 @@
   text-shadow: 0 0 12px rgba(212,175,55,0.7);
 }
 
-/* Animate card deal */
-@keyframes dealIn {
-  from { opacity: 0; transform: translateY(-20px) scale(0.8); }
-  to   { opacity: 1; transform: translateY(0)    scale(1);   }
+/* Card deal entrances. The flying-card overlay handles the motion from the
+   dealer to the seat; these run as the card LANDS (animation-delay = land time,
+   fill-mode 'both' so the card stays hidden until then — no pre-flash). */
+
+/* Face-up cards turn from edge-on to face: reads as flipping face-up on arrival. */
+@keyframes cardFlip {
+  from { opacity: 0; transform: perspective(500px) rotateY(90deg); }
+  60%  { opacity: 1; }
+  to   { opacity: 1; transform: perspective(500px) rotateY(0deg);  }
 }
 .card-dealt {
-  /* 'both' so a delayed card stays invisible until its turn (no pre-flash). */
-  animation: dealIn 0.35s ease-out both;
+  animation: cardFlip 0.3s ease-out both;
+}
+
+/* Face-down cards just settle in (the flyer already carried the motion). */
+@keyframes cardLand {
+  from { opacity: 0; transform: scale(0.9); }
+  to   { opacity: 1; transform: scale(1);   }
+}
+.card-fade {
+  animation: cardLand 0.18s ease-out both;
 }
 
 /* Winner glow */

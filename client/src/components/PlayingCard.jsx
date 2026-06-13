@@ -19,7 +19,7 @@ export default function PlayingCard({ card, size = 'md', delay = 0, faceDown = f
     const s = SIZES[size];
     return (
       <div
-        className={`card card-back ${s.outer} border-2`}
+        className={`card card-back card-fade ${s.outer} border-2`}
         style={{ animationDelay: `${animDelay}ms` }}
       />
     );
