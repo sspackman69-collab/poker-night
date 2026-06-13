@@ -25,6 +25,8 @@
       rgba(255,255,255,0.05) 4px,
       rgba(255,255,255,0.05) 8px
     );
+    /* Face-down cards deal in too, so the whole deal cascades (see delay prop). */
+    animation: dealIn 0.35s ease-out both;
   }
 
   .btn-primary {
@@ -74,7 +76,8 @@
   to   { opacity: 1; transform: translateY(0)    scale(1);   }
 }
 .card-dealt {
-  animation: dealIn 0.35s ease-out forwards;
+  /* 'both' so a delayed card stays invisible until its turn (no pre-flash). */
+  animation: dealIn 0.35s ease-out both;
 }
 
 /* Winner glow */

@@ -20,8 +20,10 @@ export default function PlayerSeat({
   isWinner,
   phase,
   position, // 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | etc.
+  dealDelay, // (playerId, cardIndex) => ms; staggers the deal animation
 }) {
   if (!player) return <div className="w-32 h-28" />;
+  const cardDelay = (i) => (dealDelay ? dealDelay(player.id, i) : i * 80);
 
   const { name, chips, bet, folded, allIn, hand, handName, isDealer, connected } = player;
   const initials = name.slice(0, 2).toUpperCase();
@@ -42,7 +44,7 @@ export default function PlayerSeat({
             // Key by position so a slot updates in place across the mask→reveal
             // transition (masked cards all share id 'back', so id-based keys
             // collide and leave orphaned face-down cards in the DOM).
-            <PlayingCard key={i} card={card} size="sm" delay={i * 80} />
+            <PlayingCard key={i} card={card} size="sm" delay={cardDelay(i)} />
           ))}
         </div>
       )}
@@ -113,7 +115,7 @@ export default function PlayerSeat({
       {showCards && !cardsOnTop && (
         <div className="flex gap-1">
           {hand.map((card, i) => (
-            <PlayingCard key={i} card={card} size="sm" delay={i * 80} />
+            <PlayingCard key={i} card={card} size="sm" delay={cardDelay(i)} />
           ))}
         </div>
       )}

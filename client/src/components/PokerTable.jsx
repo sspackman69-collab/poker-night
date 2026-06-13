@@ -31,6 +31,7 @@ export default function PokerTable({
   roundNumber,
   collecting,
   collectSignal,
+  dealDelay,
 }) {
   // Absolute seating: identical for every viewer.
   // Dealer is always seat 0 (6 o'clock); everyone else follows in join order.
@@ -112,6 +113,7 @@ export default function PokerTable({
                   isWinner={winnerIds.has(player.id)}
                   phase={phase}
                   position={seat.label}
+                  dealDelay={dealDelay}
                 />
               </div>
             );

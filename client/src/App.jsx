@@ -8,6 +8,7 @@ import DealerControls from './components/DealerControls';
 import PlayingCard from './components/PlayingCard';
 import Credits from './components/Credits';
 import { MyCoins, AS_USD } from './components/Coins';
+import { useDealDelays } from './hooks/useDealDelays';
 
 // Persist just enough to rejoin after a refresh. Per-tab (sessionStorage) so
 // each tab is its own player and a refresh restores that tab's seat.
@@ -174,6 +175,14 @@ export default function App() {
     if (gameState?.phase === 'betting') setCollecting(false);
   }, [gameState?.roundNumber, gameState?.phase]);
 
+  // Staggered card-deal animation timings (dealer's left first, dealer last).
+  // Called unconditionally (before any early return) to keep hook order stable.
+  const dealDelay = useDealDelays(
+    gameState?.players || [],
+    gameState?.dealerId,
+    gameState?.roundNumber ?? -1,
+  );
+
   // ── Render states ─────────────────────────────────────────
   if (!gameState) {
     return <Lobby onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} connecting={!connected} games={games} />;
@@ -231,6 +240,7 @@ export default function App() {
           roundNumber={roundNumber}
           collecting={collecting}
           collectSignal={collectSignal}
+          dealDelay={dealDelay}
         />
       </div>
 
@@ -263,7 +273,7 @@ export default function App() {
             {gameState.myHand?.length > 0 && (
               <div className="flex justify-center gap-1.5">
                 {gameState.myHand.map((card, i) => (
-                  <PlayingCard key={i} card={card} size="md" delay={i * 100} />
+                  <PlayingCard key={i} card={card} size="md" delay={dealDelay(myId, i)} />
                 ))}
               </div>
             )}
