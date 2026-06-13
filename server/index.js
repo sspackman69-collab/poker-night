@@ -5,7 +5,7 @@ const fs = require('fs');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { GameRoom } = require('./game/gameState');
-const { listVariants } = require('./game/variants');
+const { listVariants, getVariant } = require('./game/variants');
 
 // Allowed browser origin for CORS. In a single-service deploy the client is
 // served from this same server, so same-origin requests need no CORS at all;
@@ -127,6 +127,23 @@ io.on('connection', (socket) => {
     if (!room) return cb?.({ error: 'Room not found' });
     if (room.dealerId !== info.clientId) return cb?.({ error: 'Only the dealer can set the ante' });
     room.ante = Math.min(80, Math.max(0, Math.round(Number(ante) || 1)));
+    broadcastRoom(room);
+    cb?.({ ok: true });
+  });
+
+  // Dealer switches the game variant (only in the lobby, between hands).
+  socket.on('setVariant', ({ variantId }, cb) => {
+    const info = socketInfo.get(socket.id);
+    const room = info && rooms.get(info.code);
+    if (!room) return cb?.({ error: 'Room not found' });
+    if (room.dealerId !== info.clientId) return cb?.({ error: 'Only the dealer can change the game' });
+    if (room.phase !== 'lobby') return cb?.({ error: 'Can only change the game in the lobby' });
+    const v = getVariant(variantId);
+    if (!v) return cb?.({ error: 'Unknown game' });
+    const cap = v.maxPlayers || 8;
+    if (room.players.size > cap) return cb?.({ error: `${v.name} allows at most ${cap} players` });
+    room.variant = v;
+    room.variantId = v.id;
     broadcastRoom(room);
     cb?.({ ok: true });
   });

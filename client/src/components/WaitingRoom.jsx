@@ -1,5 +1,5 @@
-export default function WaitingRoom({ state, myId, onStart }) {
-  const { code, players, dealerId, maxPlayers = 8, variantName, ante } = state;
+export default function WaitingRoom({ state, myId, games = [], onStart, onSetVariant }) {
+  const { code, players, dealerId, maxPlayers = 8, variantId, variantName, ante } = state;
   const isDealer = myId === dealerId;
   const anteUsd = ante != null ? `$${(ante * 0.25).toFixed(2)}` : null;
 
@@ -47,6 +47,29 @@ export default function WaitingRoom({ state, myId, onStart }) {
           ))}
         </div>
       </div>
+
+      {isDealer && games.length > 0 && (
+        <div className="w-full max-w-sm">
+          <label className="text-white/40 text-xs uppercase tracking-wider mb-1 block text-center">Game</label>
+          <select
+            value={variantId || ''}
+            onChange={e => onSetVariant?.(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white focus:outline-none focus:border-gold text-center"
+          >
+            {games.map(g => (
+              <option
+                key={g.id}
+                value={g.id}
+                disabled={g.maxPlayers != null && players.length > g.maxPlayers}
+                className="bg-gray-900"
+              >
+                {g.name}{g.minPlayers ? ` · ${g.minPlayers}-${g.maxPlayers} players` : ''}
+                {g.maxPlayers != null && players.length > g.maxPlayers ? ' (too many players)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {isDealer && (
         <button

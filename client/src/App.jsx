@@ -111,6 +111,11 @@ export default function App() {
     if (res?.error) showToast(res.error);
   }
 
+  async function handleSetVariant(variantId) {
+    const res = await emit('setVariant', { variantId });
+    if (res?.error) showToast(res.error);
+  }
+
   async function handleNewRound() {
     await emit('newRound', {});
     setWinners(null);
@@ -198,7 +203,9 @@ export default function App() {
       <WaitingRoom
         state={gameState}
         myId={myId}
+        games={games}
         onStart={handleStartRound}
+        onSetVariant={handleSetVariant}
       />
     );
   }
