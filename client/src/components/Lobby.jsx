@@ -7,6 +7,7 @@ export default function Lobby({ onCreateRoom, onJoinRoom, connecting, games = []
   const [variantId, setVariantId] = useState('');
   const [ante, setAnte] = useState(1); // As units; 1 As = $0.25 (default)
   const [buyIn, setBuyIn] = useState(100); // starting purse, in dollars (default $100)
+  const [hiLo, setHiLo] = useState(false); // split the pot between best high & best low
   const [error, setError] = useState('');
 
   // Default the game picker to the first available game.
@@ -28,7 +29,7 @@ export default function Lobby({ onCreateRoom, onJoinRoom, connecting, games = []
     e.preventDefault();
     if (!name.trim()) return setError('Please enter your name');
     setError('');
-    const result = await onCreateRoom(name.trim(), selectedVariant, ante, cleanBuyIn());
+    const result = await onCreateRoom(name.trim(), selectedVariant, ante, cleanBuyIn(), hiLo);
     if (result?.error) setError(result.error);
   }
 
@@ -136,6 +137,15 @@ export default function Lobby({ onCreateRoom, onJoinRoom, connecting, games = []
               <p className="text-white/30 text-xs mt-1">Each player antes this at the start of every hand.</p>
             </div>
             {buyInField}
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={hiLo}
+                onChange={e => setHiLo(e.target.checked)}
+                className="w-4 h-4 accent-gold"
+              />
+              <span className="text-white/80 text-sm">Hi-Lo split <span className="text-white/40">— split the pot between best & worst hand</span></span>
+            </label>
             {error && <p className="text-red-400 text-sm">{error}</p>}
             <button type="submit" className="btn-primary w-full py-3 text-base" disabled={connecting}>
               {connecting ? 'Connecting…' : 'Create Room'}

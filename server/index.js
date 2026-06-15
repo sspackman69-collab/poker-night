@@ -60,7 +60,7 @@ io.on('connection', (socket) => {
   socket.on('listGames', (_, cb) => cb?.({ ok: true, games: listVariants() }));
 
   // Dealer creates a room
-  socket.on('createRoom', ({ name, clientId, variantId, ante, buyIn }, cb) => {
+  socket.on('createRoom', ({ name, clientId, variantId, ante, buyIn, hiLo }, cb) => {
     if (!clientId) return cb({ error: 'Missing client id' });
     let code = generateCode();
     while (rooms.has(code)) code = generateCode();
@@ -69,6 +69,7 @@ io.on('connection', (socket) => {
     const anteUnits = Math.min(80, Math.max(0, Math.round(Number(ante) || 1)));
     const buyInUnits = clampBuyIn(buyIn);
     const room = new GameRoom(code, clientId, name, socket.id, variantId, anteUnits, buyInUnits);
+    room.hiLo = !!hiLo;
     rooms.set(code, room);
     socketInfo.set(socket.id, { code, clientId });
     socket.join(code);
@@ -145,6 +146,32 @@ io.on('connection', (socket) => {
     room.variant = v;
     room.variantId = v.id;
     broadcastRoom(room);
+    cb?.({ ok: true });
+  });
+
+  // Dealer toggles Hi-Lo split for upcoming hands (only in the lobby).
+  socket.on('setHiLo', ({ hiLo }, cb) => {
+    const info = socketInfo.get(socket.id);
+    const room = info && rooms.get(info.code);
+    if (!room) return cb?.({ error: 'Room not found' });
+    if (room.dealerId !== info.clientId) return cb?.({ error: 'Only the dealer can change this' });
+    if (room.phase !== 'lobby') return cb?.({ error: 'Can only change Hi-Lo in the lobby' });
+    room.hiLo = !!hiLo;
+    broadcastRoom(room);
+    cb?.({ ok: true });
+  });
+
+  // A player declares hi / lo / both during the Hi-Lo declaration phase.
+  socket.on('declare', ({ choice }, cb) => {
+    const info = socketInfo.get(socket.id);
+    const room = info && rooms.get(info.code);
+    if (!room) return cb?.({ error: 'Room not found' });
+    const result = room.declare(info.clientId, choice);
+    if (result.error) return cb?.({ error: result.error });
+    broadcastRoom(room);
+    if (room.phase === 'results' && room.winners) {
+      io.to(info.code).emit('roundResult', { winners: room.winners });
+    }
     cb?.({ ok: true });
   });
 

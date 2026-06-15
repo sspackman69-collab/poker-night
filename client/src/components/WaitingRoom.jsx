@@ -1,5 +1,5 @@
-export default function WaitingRoom({ state, myId, games = [], onStart, onSetVariant }) {
-  const { code, players, dealerId, maxPlayers = 8, variantId, variantName, ante } = state;
+export default function WaitingRoom({ state, myId, games = [], onStart, onSetVariant, onSetHiLo }) {
+  const { code, players, dealerId, maxPlayers = 8, variantId, variantName, ante, hiLo } = state;
   const isDealer = myId === dealerId;
   const anteUsd = ante != null ? `$${(ante * 0.25).toFixed(2)}` : null;
 
@@ -9,7 +9,7 @@ export default function WaitingRoom({ state, myId, games = [], onStart, onSetVar
         <h1 className="font-display text-4xl font-bold text-white mb-1">Poker Night</h1>
         {variantName && (
           <p className="text-gold text-sm font-semibold">
-            {variantName}{anteUsd ? ` · Ante ${anteUsd}` : ''}
+            {variantName}{anteUsd ? ` · Ante ${anteUsd}` : ''}{hiLo ? ' · Hi-Lo' : ''}
           </p>
         )}
         <p className="text-white/40 text-sm">Waiting for players to join…</p>
@@ -68,6 +68,15 @@ export default function WaitingRoom({ state, myId, games = [], onStart, onSetVar
               </option>
             ))}
           </select>
+          <label className="flex items-center gap-2 cursor-pointer select-none mt-3 justify-center">
+            <input
+              type="checkbox"
+              checked={!!hiLo}
+              onChange={e => onSetHiLo?.(e.target.checked)}
+              className="w-4 h-4 accent-gold"
+            />
+            <span className="text-white/80 text-sm">Hi-Lo split <span className="text-white/40">(declare hi/lo/both at showdown)</span></span>
+          </label>
         </div>
       )}
 

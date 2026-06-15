@@ -212,6 +212,93 @@ function bestHand(cards, wildRanks = EMPTY) {
   return best;
 }
 
+// ── Low hand — Ace-to-Five "wheel" ──────────────────────────────────────────
+// Ace is low (1); straights & flushes DON'T count; pairs/trips are bad. A LOWER
+// hand wins. Low key = { cat, vals }: cat 0 (no pair, best) … 6 (five-of-a-kind,
+// worst); vals are the 5 ranks (ace=1) sorted descending. Compare by cat first
+// (lower better — a no-pair low always beats any paired low), then vals
+// lexicographically (lower better). Best possible low is 5-4-3-2-A.
+const LOW_RANK = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 1 };
+// Suit is irrelevant to low (flushes don't count), so wilds only need one card per rank.
+const ONE_OF_EACH_RANK = RANKS.map(rank => ({ suit: 'spades', rank }));
+const LOW_LABEL = { 1: 'A', 11: 'J', 12: 'Q', 13: 'K' };
+
+function lowCategory(pattern) {
+  const a = pattern[0], b = pattern[1];
+  if (a === 5) return 6;
+  if (a === 4) return 5;
+  if (a === 3 && b === 2) return 4;
+  if (a === 3) return 3;
+  if (a === 2 && b === 2) return 2;
+  if (a === 2) return 1;
+  return 0;
+}
+
+function lowKey5(cards) {
+  const vals = cards.map(c => LOW_RANK[c.rank]);
+  const counts = {};
+  for (const v of vals) counts[v] = (counts[v] || 0) + 1;
+  const pattern = Object.values(counts).sort((x, y) => y - x);
+  return { cat: lowCategory(pattern), vals: [...vals].sort((x, y) => y - x) };
+}
+
+// 1 if a is the BETTER (lower) low, -1 if b is, 0 tie.
+function compareLow(a, b) {
+  if (!a || !b) return a ? 1 : b ? -1 : 0;
+  if (a.cat !== b.cat) return a.cat < b.cat ? 1 : -1;
+  const n = Math.max(a.vals.length, b.vals.length);
+  for (let i = 0; i < n; i++) {
+    const x = a.vals[i] || 0, y = b.vals[i] || 0;
+    if (x !== y) return x < y ? 1 : -1;
+  }
+  return 0;
+}
+
+function lowName(key) {
+  if (!key) return null;
+  return key.vals.map(v => LOW_LABEL[v] || v).join('-') + ' low';
+}
+
+function bestOfNLow(cards) {
+  if (cards.length < 5) return null;
+  let best = null;
+  for (const five of combos(cards, 5)) {
+    const k = lowKey5(five);
+    if (!best || compareLow(k, best) > 0) best = k;
+  }
+  return best;
+}
+
+// Best (lowest) low achievable, wild-aware. Wilds become whatever rank lowers the
+// hand most (suit ignored). Returns a low key, or null if <5 cards.
+function bestLow(cards, wildRanks = EMPTY) {
+  const wilds = cards.filter(c => isWild(c, wildRanks));
+  const naturals = cards.filter(c => !isWild(c, wildRanks));
+  if (cards.length < 5) return null;
+  if (wilds.length === 0) return bestOfNLow(cards);
+  if (wilds.length >= 5) return { cat: 0, vals: [5, 4, 3, 2, 1] }; // the wheel
+  let best = null;
+  for (const repl of combosWithRepl(ONE_OF_EACH_RANK, wilds.length)) {
+    const k = bestOfNLow(naturals.concat(repl));
+    if (k && (!best || compareLow(k, best) > 0)) best = k;
+  }
+  return best;
+}
+
+// Winners of the LOW half among the given players (cards-speak). No qualifier:
+// the lowest hand always wins. Returns [{ ...player, lowName }] (ties included).
+function findLowWinners(players, wildRanks = EMPTY) {
+  const lows = players.map(p => ({ p, low: bestLow(p.hand, wildRanks) })).filter(x => x.low);
+  if (lows.length === 0) return [];
+  let best = [lows[0]];
+  for (let i = 1; i < lows.length; i++) {
+    const cmp = compareLow(lows[i].low, best[0].low);
+    if (cmp > 0) best = [lows[i]];
+    else if (cmp === 0) best.push(lows[i]);
+  }
+  return best.map(e => ({ ...e.p, lowName: lowName(e.low) }));
+}
+
 function findWinners(players, wildRanks = EMPTY) {
   // players: [{ id, name, hand }]
   const evals = players.map(p => ({ p, ev: bestHand(p.hand, wildRanks) }));
@@ -224,4 +311,7 @@ function findWinners(players, wildRanks = EMPTY) {
   return best.map(e => ({ ...e.p, handName: e.ev.name }));
 }
 
-module.exports = { evaluateHand, bestHand, findWinners, compareShowing, RANK_VALUES };
+module.exports = {
+  evaluateHand, bestHand, findWinners, compareShowing, RANK_VALUES,
+  bestLow, compareLow, findLowWinners, lowName,
+};

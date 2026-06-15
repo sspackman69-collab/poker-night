@@ -1,4 +1,4 @@
-const { bestHand } = require('./handEvaluator');
+const { bestHand, findWinners, findLowWinners } = require('./handEvaluator');
 const { getVariant, DEFAULT_VARIANT } = require('./variants');
 const {
   emptyPurse, purseValue, minCoins, coinsToPurse, buyInPurse,
@@ -21,7 +21,10 @@ class GameRoom {
     this.variant = getVariant(variantId);
     this.variantId = this.variant.id;
     this.ante = ante; // in As units (1 As = $0.25); dealer-configurable
-    this.phase = 'lobby'; // lobby | betting | showdown | results
+    this.hiLo = false; // dealer toggle: split the pot between best high and best low
+    this.declarations = {}; // playerId -> 'hi'|'lo'|'both' (hi-lo declare phase)
+    this.declareIds = null; // ids that still must declare this hand
+    this.phase = 'lobby'; // lobby | betting | declare | showdown | results
     this.deck = [];
     this.pot = 0;
     this.currentBet = 0;
@@ -148,6 +151,8 @@ class GameRoom {
     this.winners = null;
     this.revealHands = false;
     this.redealReason = null;
+    this.declarations = {};
+    this.declareIds = null;
     this.potCoins = [];
     this.wildRanks = new Set();
     this.actionOrder = [];
@@ -207,6 +212,8 @@ class GameRoom {
     this.potCoins = [];
     this.revealHands = false; // hide hole cards until/unless a real showdown happens
     this.redealReason = null;
+    this.declarations = {}; // fresh hi-lo declarations (the hiLo toggle itself persists)
+    this.declareIds = null;
     for (const p of this.players.values()) p.committed = 0; // fresh per-hand tally
     this.variant.startHand(this);
   }
@@ -348,8 +355,77 @@ class GameRoom {
   // The variant calls this to run the showdown using its winner logic. Only here
   // do hole cards get revealed — a hand won by everyone else folding does NOT.
   goToShowdown() {
+    // Hi-Lo: before revealing, every remaining player secretly declares hi / lo /
+    // both. Resolution happens once all have declared. (Needs ≥2 players.)
+    if (this.hiLo && this.livePlayers().length >= 2) {
+      this.enterDeclare();
+      return;
+    }
     this.revealHands = true;
     const groups = this.variant.determineWinners(this);
+    this.finishHand(groups);
+  }
+
+  // ── Hi-Lo declaration ────────────────────────────────────────────────────
+  enterDeclare() {
+    this.phase = 'declare';
+    this.declarations = {};
+    this.declareIds = this.livePlayers().map(p => p.id);
+    this.actionOrder = [];
+    this.currentActorIndex = 0;
+    // Hands stay hidden until everyone has declared (simultaneous & secret).
+  }
+
+  // A player locks in hi / lo / both. When all have declared, resolve.
+  declare(playerId, choice) {
+    if (this.phase !== 'declare') return { error: 'Not the declaration phase' };
+    if (!this.declareIds || !this.declareIds.includes(playerId)) return { error: 'You are not in this hand' };
+    if (!['hi', 'lo', 'both'].includes(choice)) return { error: 'Invalid declaration' };
+    this.declarations[playerId] = choice;
+    if (this.declareIds.every(id => this.declarations[id])) this.resolveHiLo();
+    return { ok: true };
+  }
+
+  // Split the pot between the best high and best low among the declarers. A
+  // "both" declarer must win BOTH halves or they forfeit entirely (their winning
+  // half then goes to the next-best eligible). If nobody declared a side, the
+  // other side takes the whole pot.
+  resolveHiLo() {
+    this.revealHands = true;
+    const live = this.livePlayers();
+    const decl = this.declarations;
+    const asEval = (arr) => arr.map(p => ({ id: p.id, name: p.name, hand: p.hand }));
+
+    let hiPool = live.filter(p => decl[p.id] === 'hi' || decl[p.id] === 'both');
+    let loPool = live.filter(p => decl[p.id] === 'lo' || decl[p.id] === 'both');
+    const bothIds = new Set(live.filter(p => decl[p.id] === 'both').map(p => p.id));
+
+    let hiWin = [], loWin = [];
+    for (let iter = 0; iter <= live.length; iter++) {
+      hiWin = hiPool.length ? findWinners(asEval(hiPool), this.wildRanks) : [];
+      loWin = loPool.length ? findLowWinners(asEval(loPool), this.wildRanks) : [];
+      const hiIds = new Set(hiWin.map(w => w.id));
+      const loIds = new Set(loWin.map(w => w.id));
+      // A "both" declarer who wins exactly ONE half forfeits → recompute.
+      let failed = null;
+      for (const id of bothIds) {
+        const wonHi = hiIds.has(id), wonLo = loIds.has(id);
+        if ((wonHi || wonLo) && !(wonHi && wonLo)) { failed = id; break; }
+      }
+      if (failed == null) break;
+      hiPool = hiPool.filter(p => p.id !== failed);
+      loPool = loPool.filter(p => p.id !== failed);
+      bothIds.delete(failed);
+    }
+
+    const groups = [];
+    if (hiWin.length) groups.push({ winnerIds: hiWin.map(w => w.id), handName: hiWin[0].handName, side: 'hi' });
+    if (loWin.length) groups.push({ winnerIds: loWin.map(w => w.id), handName: loWin[0].lowName, side: 'lo' });
+    if (groups.length === 0) {
+      // Safety net (e.g. all "both" forfeited): award high among everyone live.
+      const hw = findWinners(asEval(live), this.wildRanks);
+      groups.push({ winnerIds: hw.map(w => w.id), handName: hw[0].handName, side: 'hi' });
+    }
     this.finishHand(groups);
   }
 
@@ -379,7 +455,7 @@ class GameRoom {
           const amount = share + (withinRem > 0 ? 1 : 0);
           if (withinRem > 0) withinRem--;
           payouts.push({ id, amount });
-          flat.push({ id, name: this.players.get(id).name, handName: g.handName });
+          flat.push({ id, name: this.players.get(id).name, handName: g.handName, side: g.side || null });
         }
       }
     }
@@ -463,6 +539,13 @@ class GameRoom {
       maxPlayers: this.variant.maxPlayers,
       ante: this.ante,
       redealReason: this.redealReason,
+      hiLo: this.hiLo,
+      // During 'declare', expose only WHO has locked in (not their choice). The
+      // requester always sees their own pick. Full declarations reveal at results.
+      declareIds: this.declareIds ? [...this.declareIds] : null,
+      declaredIds: this.phase === 'declare' ? Object.keys(this.declarations) : null,
+      declarations: this.phase === 'results' ? { ...this.declarations } : null,
+      myDeclaration: me ? (this.declarations[me.id] || null) : null,
       wildRanks: [...this.wildRanks],
       currentActor: this.getCurrentActor(),
       dealerId: this.dealerId,

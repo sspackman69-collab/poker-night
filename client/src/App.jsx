@@ -49,8 +49,18 @@ export default function App() {
 
     const cleanup2 = on('roundResult', ({ winners: w }) => {
       setWinners(w);
-      const names = w.map(p => p.name).join(' & ');
-      showToast(`🏆 ${names} wins with ${w[0]?.handName}!`);
+      // Hi-Lo results carry a `side` ('hi'/'lo') per winner — show both halves.
+      if (w.some(p => p.side)) {
+        const hi = w.filter(p => p.side === 'hi');
+        const lo = w.filter(p => p.side === 'lo');
+        const parts = [];
+        if (hi.length) parts.push(`HI: ${hi.map(p => p.name).join(' & ')} (${hi[0].handName})`);
+        if (lo.length) parts.push(`LO: ${lo.map(p => p.name).join(' & ')} (${lo[0].handName})`);
+        showToast(`🏆 ${parts.join('   ·   ')}`);
+      } else {
+        const names = w.map(p => p.name).join(' & ');
+        showToast(`🏆 ${names} wins with ${w[0]?.handName}!`);
+      }
     });
 
     const cleanup3 = on('announce', ({ message }) => showToast(message));
@@ -78,8 +88,8 @@ export default function App() {
     setTimeout(() => setToast(null), 4000);
   }
 
-  async function handleCreateRoom(name, variantId, ante, buyIn) {
-    const res = await emit('createRoom', { name, clientId, variantId, ante, buyIn });
+  async function handleCreateRoom(name, variantId, ante, buyIn, hiLo) {
+    const res = await emit('createRoom', { name, clientId, variantId, ante, buyIn, hiLo });
     if (res?.ok) {
       setGameState(res.state);
       saveSession(res.code);
@@ -113,6 +123,16 @@ export default function App() {
 
   async function handleSetVariant(variantId) {
     const res = await emit('setVariant', { variantId });
+    if (res?.error) showToast(res.error);
+  }
+
+  async function handleSetHiLo(hiLo) {
+    const res = await emit('setHiLo', { hiLo });
+    if (res?.error) showToast(res.error);
+  }
+
+  async function handleDeclare(choice) {
+    const res = await emit('declare', { choice });
     if (res?.error) showToast(res.error);
   }
 
@@ -206,6 +226,7 @@ export default function App() {
         games={games}
         onStart={handleStartRound}
         onSetVariant={handleSetVariant}
+        onSetHiLo={handleSetHiLo}
       />
     );
   }
@@ -290,11 +311,39 @@ export default function App() {
               {phase === 'showdown' && 'Showdown — all cards revealed'}
               {phase === 'results' && '🏆 Round over'}
               {phase === 'redeal' && (isDealer ? '🕷️ Re-deal required — click Re-deal' : '🕷️ Waiting for dealer to re-deal…')}
+              {phase === 'declare' && '🎯 Hi-Lo — declare your hand'}
             </div>
 
             {phase === 'redeal' && gameState.redealReason && (
               <div className="text-rose-300 text-xs text-center max-w-md">{gameState.redealReason}</div>
             )}
+
+            {phase === 'declare' && (() => {
+              const total = gameState.declareIds?.length ?? 0;
+              const done = gameState.declaredIds?.length ?? 0;
+              const inHand = gameState.declareIds?.includes(myId);
+              const LABEL = { hi: 'High', lo: 'Low', both: 'Both' };
+              if (!inHand) {
+                return <div className="text-white/40 text-xs">Players are declaring… ({done}/{total})</div>;
+              }
+              if (gameState.myDeclaration) {
+                return (
+                  <div className="text-gold text-sm font-semibold">
+                    You declared {LABEL[gameState.myDeclaration]} — waiting for others ({done}/{total})
+                  </div>
+                );
+              }
+              return (
+                <div className="flex flex-col items-center gap-1.5">
+                  <div className="flex gap-2">
+                    <button onClick={() => handleDeclare('hi')} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold">Go High</button>
+                    <button onClick={() => handleDeclare('lo')} className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold">Go Low</button>
+                    <button onClick={() => handleDeclare('both')} className="px-4 py-2 rounded-lg bg-gold text-gray-900 hover:bg-gold-light text-sm font-bold">Go Both</button>
+                  </div>
+                  <div className="text-white/30 text-[10px]">“Both” must win BOTH halves outright, or you win nothing</div>
+                </div>
+              );
+            })()}
 
             {phase === 'betting' && !isDealer && (
               <BettingControls
