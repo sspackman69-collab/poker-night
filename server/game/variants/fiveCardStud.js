@@ -42,7 +42,10 @@ module.exports = {
       player.bet = 0;
       player.folded = false;
       player.allIn = false;
-      if (!player.connected) { player.folded = true; continue; } // sit out
+      // Sit out the disconnected and the broke ($0): they keep their seat but
+      // aren't dealt in and don't ante.
+      if (!player.connected || player.chips <= 0) { player.folded = true; player.sittingOut = true; continue; }
+      player.sittingOut = false;
       const ante = Math.min(room.ante, player.chips);
       room.payIntoPot(player, ante);
     }

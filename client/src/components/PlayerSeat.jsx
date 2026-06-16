@@ -25,7 +25,7 @@ export default function PlayerSeat({
   if (!player) return <div className="w-32 h-28" />;
   const cardDelay = (i) => (dealDelay ? dealDelay(player.id, i) : i * 80);
 
-  const { name, chips, bet, folded, allIn, hand, handName, isDealer, connected } = player;
+  const { name, chips, bet, folded, sittingOut, allIn, hand, handName, isDealer, connected } = player;
   const initials = name.slice(0, 2).toUpperCase();
   const color = avatarColor(name);
 
@@ -98,10 +98,12 @@ export default function PlayerSeat({
           </div>
         )}
 
-        {/* Folded label */}
+        {/* Folded / sitting-out label */}
         {folded && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl">
-            <span className="text-red-400 font-bold text-xs rotate-[-15deg]">FOLDED</span>
+            <span className={`font-bold text-xs rotate-[-15deg] ${sittingOut ? 'text-white/60' : 'text-red-400'}`}>
+              {sittingOut ? 'SITTING OUT' : 'FOLDED'}
+            </span>
           </div>
         )}
 

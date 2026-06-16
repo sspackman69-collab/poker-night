@@ -58,6 +58,7 @@ class GameRoom {
       bet: 0,
       committed: 0, // cumulative value put into the pot THIS hand (never street-reset)
       folded: false,
+      sittingOut: false, // broke ($0) or disconnected — keeps the seat, not dealt in
       allIn: false,
       connected: true,
     });
@@ -507,6 +508,7 @@ class GameRoom {
       bet: p.bet,
       committed: p.committed || 0, // public: cumulative pot contribution this hand
       folded: p.folded,
+      sittingOut: p.sittingOut,
       allIn: p.allIn,
       connected: p.connected,
       cardCount: p.hand.length,
