@@ -397,6 +397,11 @@ export default function App() {
                 onStart={handleDealNext}
                 onNewRound={handleNewRound}
                 onRedeal={handleRedeal}
+                games={games}
+                variantId={gameState.variantId}
+                hiLo={gameState.hiLo}
+                onSetVariant={handleSetVariant}
+                onSetHiLo={handleSetHiLo}
                 busy={collecting}
               />
             )}

@@ -1,6 +1,6 @@
 import { ANTE_OPTIONS } from './Coins';
 
-export default function DealerControls({ phase, playerCount, ante, onSetAnte, onStart, onNewRound, onRedeal, busy }) {
+export default function DealerControls({ phase, playerCount, ante, games = [], variantId, hiLo, onSetAnte, onSetVariant, onSetHiLo, onStart, onNewRound, onRedeal, busy }) {
   return (
     <div className="flex flex-wrap items-center gap-3 justify-center">
       <span className="text-gold text-xs font-semibold uppercase tracking-wider mr-1">Dealer Controls</span>
@@ -29,6 +29,29 @@ export default function DealerControls({ phase, playerCount, ante, onSetAnte, on
         >
           🕷️ Re-deal
         </button>
+      )}
+
+      {/* At end of hand, let the dealer change the game / Hi-Lo for the next hand
+          without returning to the lobby. */}
+      {phase === 'results' && games.length > 0 && (
+        <>
+          <select
+            value={variantId || ''}
+            onChange={e => onSetVariant?.(e.target.value)}
+            className="px-2 py-1 rounded bg-white/10 border border-white/20 text-white text-xs"
+            title="Next hand's game"
+          >
+            {games.map(g => (
+              <option key={g.id} value={g.id} disabled={g.maxPlayers != null && playerCount > g.maxPlayers} className="bg-gray-900">
+                {g.name}
+              </option>
+            ))}
+          </select>
+          <label className="flex items-center gap-1 text-white/70 text-xs cursor-pointer select-none">
+            <input type="checkbox" checked={!!hiLo} onChange={e => onSetHiLo?.(e.target.checked)} className="w-4 h-4 accent-gold" />
+            Hi-Lo
+          </label>
+        </>
       )}
 
       {(phase === 'lobby' || phase === 'results') && (

@@ -138,7 +138,7 @@ io.on('connection', (socket) => {
     const room = info && rooms.get(info.code);
     if (!room) return cb?.({ error: 'Room not found' });
     if (room.dealerId !== info.clientId) return cb?.({ error: 'Only the dealer can change the game' });
-    if (room.phase !== 'lobby') return cb?.({ error: 'Can only change the game in the lobby' });
+    if (room.phase !== 'lobby' && room.phase !== 'results') return cb?.({ error: 'Change the game between hands' });
     const v = getVariant(variantId);
     if (!v) return cb?.({ error: 'Unknown game' });
     const cap = v.maxPlayers || 8;
@@ -155,7 +155,7 @@ io.on('connection', (socket) => {
     const room = info && rooms.get(info.code);
     if (!room) return cb?.({ error: 'Room not found' });
     if (room.dealerId !== info.clientId) return cb?.({ error: 'Only the dealer can change this' });
-    if (room.phase !== 'lobby') return cb?.({ error: 'Can only change Hi-Lo in the lobby' });
+    if (room.phase !== 'lobby' && room.phase !== 'results') return cb?.({ error: 'Change Hi-Lo between hands' });
     room.hiLo = !!hiLo;
     broadcastRoom(room);
     cb?.({ ok: true });
