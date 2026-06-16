@@ -438,7 +438,7 @@ class GameRoom {
   // collectPot() runs, so coins don't reach a purse until the next deal.
   finishHand(groups) {
     const valid = groups
-      .map(g => ({ handName: g.handName, ids: g.winnerIds.filter(id => this.players.has(id)) }))
+      .map(g => ({ handName: g.handName, side: g.side || null, ids: g.winnerIds.filter(id => this.players.has(id)) }))
       .filter(g => g.ids.length > 0);
 
     const flat = [];

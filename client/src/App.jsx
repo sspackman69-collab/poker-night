@@ -345,6 +345,37 @@ export default function App() {
               );
             })()}
 
+            {/* Persistent winner panel — stays up at results until the dealer
+                deals the next hand or returns to the lobby. */}
+            {phase === 'results' && winners?.length > 0 && (() => {
+              const hi = winners.filter(w => w.side === 'hi');
+              const lo = winners.filter(w => w.side === 'lo');
+              const isSplit = winners.some(w => w.side);
+              const names = (arr) => arr.map(w => w.name).join(' & ');
+              return (
+                <div className="bg-gray-900/90 border border-gold/50 rounded-xl px-5 py-3 text-center shadow-xl">
+                  {isSplit ? (
+                    <div className="flex flex-col gap-1">
+                      {hi.length > 0 && (
+                        <div className="text-white font-semibold">
+                          <span className="text-blue-300">🏆 HIGH</span> — {names(hi)} <span className="text-white/60">({hi[0].handName})</span>
+                        </div>
+                      )}
+                      {lo.length > 0 && (
+                        <div className="text-white font-semibold">
+                          <span className="text-emerald-300">🥄 LOW</span> — {names(lo)} <span className="text-white/60">({lo[0].handName})</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-white font-semibold">
+                      🏆 {names(winners)} win{winners.length > 1 ? '' : 's'} <span className="text-white/60">({winners[0].handName})</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {phase === 'betting' && !isDealer && (
               <BettingControls
                 onAction={handlePlayerAction}
