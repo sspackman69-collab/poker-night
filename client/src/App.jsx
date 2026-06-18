@@ -248,6 +248,9 @@ export default function App() {
           {gameState.ante != null && (
             <span className="text-white/40">Ante <span className="text-gold">${(gameState.ante * 0.25).toFixed(2)}</span></span>
           )}
+          {gameState.hiLo && (
+            <span className="text-gray-900 bg-gold font-bold text-[10px] px-1.5 py-0.5 rounded">HI-LO</span>
+          )}
           <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
         </div>
       </div>
