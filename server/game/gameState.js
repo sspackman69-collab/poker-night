@@ -176,6 +176,11 @@ class GameRoom {
     return [...this.players.values()].filter(p => !p.folded && p.connected);
   }
 
+  // Players who could be dealt into a new hand: connected AND have chips.
+  dealableCount() {
+    return [...this.players.values()].filter(p => p.connected && p.chips > 0).length;
+  }
+
   // The order cards are physically DEALT: starting at the dealer's left and
   // proceeding clockwise, with the DEALER receiving last (as in real poker).
   // Variants must deal in this order — it determines which card lands where,
@@ -527,6 +532,7 @@ class GameRoom {
     const me = this.players.get(requestingPlayerId);
     const myHand = me ? me.hand.map(withWild) : [];
     const myPurse = me ? { ...me.purse } : null; // the owner's actual coins
+    const solventNames = [...this.players.values()].filter(p => p.chips > 0).map(p => p.name);
 
     return {
       code: this.code,
@@ -542,6 +548,11 @@ class GameRoom {
       ante: this.ante,
       redealReason: this.redealReason,
       hiLo: this.hiLo,
+      // End-of-game: chips are private, so tell clients how many players can be
+      // dealt in, and (when only one has chips left) who won the whole game.
+      dealableCount: this.dealableCount(),
+      gameOver: solventNames.length === 1,
+      gameWinner: solventNames.length === 1 ? solventNames[0] : null,
       // During 'declare', expose only WHO has locked in (not their choice). The
       // requester always sees their own pick. Full declarations reveal at results.
       declareIds: this.declareIds ? [...this.declareIds] : null,

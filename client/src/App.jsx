@@ -403,6 +403,9 @@ export default function App() {
                 games={games}
                 variantId={gameState.variantId}
                 hiLo={gameState.hiLo}
+                dealableCount={gameState.dealableCount}
+                gameOver={gameState.gameOver}
+                gameWinner={gameState.gameWinner}
                 onSetVariant={handleSetVariant}
                 onSetHiLo={handleSetHiLo}
                 busy={collecting}

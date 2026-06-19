@@ -1,6 +1,7 @@
 export default function WaitingRoom({ state, myId, games = [], onStart, onSetVariant, onSetHiLo }) {
-  const { code, players, dealerId, maxPlayers = 8, variantId, variantName, ante, hiLo } = state;
+  const { code, players, dealerId, maxPlayers = 8, variantId, variantName, ante, hiLo, dealableCount = 0, gameOver, gameWinner } = state;
   const isDealer = myId === dealerId;
+  const canDeal = players.length >= 2 && dealableCount >= 2;
   const anteUsd = ante != null ? `$${(ante * 0.25).toFixed(2)}` : null;
 
   return (
@@ -80,12 +81,19 @@ export default function WaitingRoom({ state, myId, games = [], onStart, onSetVar
         </div>
       )}
 
+      {gameOver && (
+        <p className="text-gold font-semibold text-center">🏆 {gameWinner} wins the game — everyone else is out of chips.</p>
+      )}
+      {!gameOver && players.length >= 2 && dealableCount < 2 && (
+        <p className="text-white/50 text-sm text-center">Need at least 2 players with chips to deal.</p>
+      )}
+
       {isDealer && (
         <button
           className="btn-primary px-10 py-3 text-base"
           onClick={onStart}
-          disabled={players.length < 2}
-          title={players.length < 2 ? 'Need at least 2 players' : ''}
+          disabled={!canDeal}
+          title={!canDeal ? 'Need at least 2 players with chips' : ''}
         >
           Deal Cards
         </button>

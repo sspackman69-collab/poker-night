@@ -1,6 +1,7 @@
 import { ANTE_OPTIONS } from './Coins';
 
-export default function DealerControls({ phase, playerCount, ante, games = [], variantId, hiLo, onSetAnte, onSetVariant, onSetHiLo, onStart, onNewRound, onRedeal, busy }) {
+export default function DealerControls({ phase, playerCount, ante, games = [], variantId, hiLo, dealableCount = 99, gameOver, gameWinner, onSetAnte, onSetVariant, onSetHiLo, onStart, onNewRound, onRedeal, busy }) {
+  const canDeal = playerCount >= 2 && dealableCount >= 2;
   return (
     <div className="flex flex-wrap items-center gap-3 justify-center">
       <span className="text-gold text-xs font-semibold uppercase tracking-wider mr-1">Dealer Controls</span>
@@ -54,12 +55,19 @@ export default function DealerControls({ phase, playerCount, ante, games = [], v
         </>
       )}
 
+      {phase === 'results' && gameOver && (
+        <span className="text-gold text-xs font-semibold">🏆 {gameWinner} wins the game!</span>
+      )}
+      {phase === 'results' && !gameOver && dealableCount < 2 && (
+        <span className="text-white/50 text-xs">Need 2 players with chips</span>
+      )}
+
       {(phase === 'lobby' || phase === 'results') && (
         <button
           className="btn-primary"
           onClick={onStart}
-          disabled={playerCount < 2 || busy}
-          title={playerCount < 2 ? 'Need at least 2 players' : ''}
+          disabled={!canDeal || busy}
+          title={!canDeal ? 'Need at least 2 players with chips' : ''}
         >
           {phase === 'results' ? 'Deal Next Hand' : 'Deal Cards'}
         </button>

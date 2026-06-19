@@ -182,6 +182,7 @@ io.on('connection', (socket) => {
     if (!room) return cb?.({ error: 'Room not found' });
     if (room.dealerId !== info.clientId) return cb?.({ error: 'Only the dealer can start' });
     if (room.players.size < 2) return cb?.({ error: 'Need at least 2 players' });
+    if (room.dealableCount() < 2) return cb?.({ error: 'Need at least 2 connected players with chips to deal' });
 
     room.startRound();
     broadcastRoom(room);
