@@ -1,7 +1,11 @@
-export default function WaitingRoom({ state, myId, games = [], onStart, onSetVariant, onSetHiLo }) {
+import { useState } from 'react';
+
+export default function WaitingRoom({ state, myId, games = [], onStart, onSetVariant, onSetHiLo, onRebuy }) {
   const { code, players, dealerId, maxPlayers = 8, variantId, variantName, ante, hiLo, dealableCount = 0, gameOver, gameWinner } = state;
   const isDealer = myId === dealerId;
   const canDeal = players.length >= 2 && dealableCount >= 2;
+  const me = players.find(p => p.id === myId);
+  const [rebuyDollars, setRebuyDollars] = useState(100);
   const anteUsd = ante != null ? `$${(ante * 0.25).toFixed(2)}` : null;
 
   return (
@@ -78,6 +82,25 @@ export default function WaitingRoom({ state, myId, games = [], onStart, onSetVar
             />
             <span className="text-white/80 text-sm">Hi-Lo split <span className="text-white/40">(declare hi/lo/both at showdown)</span></span>
           </label>
+        </div>
+      )}
+
+      {me && me.chips === 0 && (
+        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
+          <span className="text-white/60 text-sm">You're out of chips —</span>
+          <span className="text-white/40">$</span>
+          <input
+            type="number" min={1} max={10000}
+            value={rebuyDollars}
+            onChange={e => setRebuyDollars(e.target.value)}
+            className="w-20 px-2 py-1 rounded bg-white/10 border border-white/20 text-white text-sm"
+          />
+          <button
+            onClick={() => onRebuy?.(rebuyDollars)}
+            className="px-3 py-1 rounded-md bg-gold text-gray-900 hover:bg-gold-light text-sm font-bold"
+          >
+            Rebuy
+          </button>
         </div>
       )}
 

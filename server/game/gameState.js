@@ -181,6 +181,21 @@ class GameRoom {
     return [...this.players.values()].filter(p => p.connected && p.chips > 0).length;
   }
 
+  // A broke player buys back in (between hands) for `units` As. Adds a fresh
+  // balanced purse to whatever they have (normally nothing) so they're dealt the
+  // next hand. Only allowed when out of chips and not mid-hand.
+  rebuy(playerId, units) {
+    const p = this.players.get(playerId);
+    if (!p) return { error: 'Player not found' };
+    if (this.phase !== 'lobby' && this.phase !== 'results') return { error: 'Rebuy between hands' };
+    if (p.chips > 0) return { error: 'You still have chips' };
+    if (!units || units <= 0) return { error: 'Invalid rebuy amount' };
+    const add = buyInPurse(units);
+    for (const v of Object.keys(add)) p.purse[v] = (p.purse[v] || 0) + add[v];
+    this._sync(p);
+    return { ok: true };
+  }
+
   // The order cards are physically DEALT: starting at the dealer's left and
   // proceeding clockwise, with the DEALER receiving last (as in real poker).
   // Variants must deal in this order — it determines which card lands where,

@@ -161,6 +161,17 @@ io.on('connection', (socket) => {
     cb?.({ ok: true });
   });
 
+  // A broke player buys back in (between hands) for the next deal.
+  socket.on('rebuy', ({ amount }, cb) => {
+    const info = socketInfo.get(socket.id);
+    const room = info && rooms.get(info.code);
+    if (!room) return cb?.({ error: 'Room not found' });
+    const result = room.rebuy(info.clientId, clampBuyIn(amount));
+    if (result.error) return cb?.({ error: result.error });
+    broadcastRoom(room);
+    cb?.({ ok: true });
+  });
+
   // A player declares hi / lo / both during the Hi-Lo declaration phase.
   socket.on('declare', ({ choice }, cb) => {
     const info = socketInfo.get(socket.id);

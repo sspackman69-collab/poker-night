@@ -28,6 +28,7 @@ export default function App() {
   const betBuilding = useRef(false);               // coin-click session flag
   const [collecting, setCollecting] = useState(false); // pot is flying to winner
   const [collectSignal, setCollectSignal] = useState(0); // bump to trigger fly-out
+  const [rebuyDollars, setRebuyDollars] = useState(100); // broke-player rebuy amount
 
   // Fetch the available game variants once connected (for the dealer's picker).
   useEffect(() => {
@@ -146,6 +147,11 @@ export default function App() {
     if (res?.error) showToast(res.error);
   }
 
+  async function handleRebuy(amount) {
+    const res = await emit('rebuy', { amount });
+    if (res?.error) showToast(res.error);
+  }
+
   // Reset the bet box to a sensible default whenever the turn or bet changes.
   useEffect(() => {
     if (!gameState || gameState.phase !== 'betting') return;
@@ -227,6 +233,7 @@ export default function App() {
         onStart={handleStartRound}
         onSetVariant={handleSetVariant}
         onSetHiLo={handleSetHiLo}
+        onRebuy={handleRebuy}
       />
     );
   }
@@ -296,6 +303,27 @@ export default function App() {
               >
                 All-In
               </button>
+            )}
+            {me && me.chips === 0 && (
+              phase === 'results' ? (
+                <div className="mt-1 flex items-center gap-1">
+                  <span className="text-white/40">$</span>
+                  <input
+                    type="number" min={1} max={10000}
+                    value={rebuyDollars}
+                    onChange={e => setRebuyDollars(e.target.value)}
+                    className="w-16 px-2 py-1 rounded bg-white/10 border border-white/20 text-white text-xs"
+                  />
+                  <button
+                    onClick={() => handleRebuy(rebuyDollars)}
+                    className="px-3 py-1 rounded-md bg-gold text-gray-900 hover:bg-gold-light text-xs font-bold shadow"
+                  >
+                    Rebuy
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-1 text-white/40 text-[11px]">Out of chips — rebuy after this hand</div>
+              )
             )}
           </div>
 
