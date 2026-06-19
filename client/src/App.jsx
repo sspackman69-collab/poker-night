@@ -201,9 +201,14 @@ export default function App() {
     }
   }
 
-  // Clear the "collecting" overlay once the next hand has actually started.
+  // Clear the "collecting" overlay AND the previous hand's winner highlight once
+  // the next hand has actually started (otherwise last hand's winner keeps
+  // flashing through the new hand).
   useEffect(() => {
-    if (gameState?.phase === 'betting') setCollecting(false);
+    if (gameState?.phase === 'betting') {
+      setCollecting(false);
+      setWinners(null);
+    }
   }, [gameState?.roundNumber, gameState?.phase]);
 
   // Staggered card-deal animation timings (dealer's left first, dealer last).
